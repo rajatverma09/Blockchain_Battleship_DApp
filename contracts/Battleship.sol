@@ -18,7 +18,8 @@ contract Battleship
         mapping(address => int8[10][10]) playerGrids;
         mapping(address => bool[5]) isShipPlaced;
         mapping(address => uint8) nShipsPlaced;
-        mapping(address => uint8) hits;
+        mapping(address => uint8[5]) nHitsToShip;
+        mapping(address => uint8) nShipsSunk;
     }
     
     mapping(address => string) public playerName;
@@ -26,8 +27,7 @@ contract Battleship
     mapping(string => Game) public gamelist;
     mapping(string => bool) public isGamelist;
     int8[10][10] otherPlayerBoard;
-    uint8 requiredHits = 17;
-    
+
     //modifiers
     modifier isState(string memory gameId, GameState state)
     {
@@ -67,18 +67,6 @@ contract Battleship
     {
         return gamelist[gameId].playerGrids[msg.sender];
     }
-    function getShipLength(uint8 shipId) private pure returns(uint8)
-    {
-        if(shipId == 1) // Carrier
-            return 5;
-        else if(shipId == 2) // Battleship
-            return 4;
-        else if(shipId == 3 || shipId == 4) // Destroyer or Submarine
-            return 3;
-        else if(shipId == 5) // Patrol Boat
-            return 2;
-        return 0;
-    }
     function findOtherPlayer(string memory gameId,address player) internal view returns(address)
     {
         if(player == gamelist[gameId].player1) return gamelist[gameId].player2;
@@ -112,6 +100,33 @@ contract Battleship
             return "Playing";
         if(gamelist[gameId].state == GameState.Finished)
             return "Finished";
+    }
+    function isShipSunk(string memory gameId, uint8 shipId, address me) private view returns(bool)
+    {
+        uint8 h = gamelist[gameId].nHitsToShip[me][shipId - 1];
+        if(shipId == 1 && h == 5)
+            return true;
+        if(shipId == 2 && h == 4)
+            return true;
+        if(shipId == 3 && h == 3)
+            return true;
+        if(shipId == 4 && h == 3)
+            return true;
+        if(shipId == 5 && h == 2)
+            return true;
+        return false;
+    }
+    function getShipLength(uint8 shipId) private pure returns(uint8)
+    {
+        if(shipId == 1) // Carrier
+            return 5;
+        else if(shipId == 2) // Battleship
+            return 4;
+        else if(shipId == 3 || shipId == 4) // Destroyer or Submarine
+            return 3;
+        else if(shipId == 5) // Patrol Boat
+            return 2;
+        return 0;
     }
 
     
@@ -216,14 +231,18 @@ contract Battleship
         require(gamelist[gameId].playerGrids[otherPlayer][x][y] >= 0, "You already hit that place");
         if(gamelist[gameId].playerGrids[otherPlayer][x][y] > 0) 
         {
+            gamelist[gameId].nHitsToShip[msg.sender][uint8(gamelist[gameId].playerGrids[otherPlayer][x][y] - 1)]++;   
+            if(isShipSunk(gameId, uint8(gamelist[gameId].playerGrids[otherPlayer][x][y]), msg.sender))
+            {
+                gamelist[gameId].nShipsSunk[msg.sender]++;
+            }
             gamelist[gameId].playerGrids[otherPlayer][x][y] = -1 * gamelist[gameId].playerGrids[otherPlayer][x][y];
-            gamelist[gameId].hits[msg.sender]++;
         }
         else
         {
             gamelist[gameId].playerGrids[otherPlayer][x][y] = -10;
         }
-        if(gamelist[gameId].hits[msg.sender] == requiredHits)
+        if(gamelist[gameId].nShipsSunk[msg.sender] == 5)
         {
             gamelist[gameId].state = GameState.Finished;   
             gamelist[gameId].winner = msg.sender;
